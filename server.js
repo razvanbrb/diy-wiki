@@ -18,7 +18,7 @@ const bodyParser = require('body-parser');
 const logger = require('./middleware/logger');
 
 // declare local constants and helper functions
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 const DATA_DIR = 'data';
 const TAG_RE = /#\w+/g;
 const slugToPath = (slug) => {
@@ -66,9 +66,16 @@ app.get('/api/page/:slug', async (req, res) => {
 app.post('/api/page/:slug', async (req, res) => {
   const filename = slugToPath(req.params.slug);
   try {
+    // read request body which still is not file
+    const text = req.body;
+    // write current change to in file
+    await writeFile(filename, text.body);
+
+    console.log(data[0]:'Files has been changed', data[1]: text);
+    res.json({status: 'ok', text});
 
   } catch (e) {
-
+    res.json({status:'error', message: 'Could not write page'});
   }
 });
 
@@ -79,7 +86,16 @@ app.post('/api/page/:slug', async (req, res) => {
 //  success response: {status:'ok', pages: ['fileName', 'otherFileName']}
 //  failure response: no failure response
 app.get('/api/pages/all', async (req, res) => {
+  // first read all files name
+  const pathOfData= __dirname + '/' + DATA_DIR;
+  const readDirectory = await readDir(pathOfData);
+  // remove .md from files name
+  const removedMd = [];
 
+  readDirectory.forEach((element) => {
+    removedMd.push(element.replace('.md', ''));
+  });
+  res.json({status: 'ok', pages: removedMd});
 });
 
 
@@ -90,6 +106,31 @@ app.get('/api/pages/all', async (req, res) => {
 //  success response: {status:'ok', tags: ['tagName', 'otherTagName']}
 //  failure response: no failure response
 app.get('/api/tags/all', async (req, res) => {
+  // first read all files
+  const pathOfData = __dirname + '/' +DATA_DIR;
+  const readDirectory = await readDir(pathOfData);
+
+  // loop over files and get their content
+  const tags= [];
+  let concatTags = [];
+  readDirectory.forEach((file)=>{
+    const filePath = __dirname + '/' +DATA_DIR + '/' + file;
+     // read file content
+    //const TAG_RE = /#\w+/g;
+    // \wFind a word character
+    // /g 	Perform a global match (find all matches rather than stopping after the first match)
+    const body = fs.readFileSync(filePath, 'utf-8');
+    const findTags = body.match(TAG_RE);
+    // remove # from words
+    const pureLetter = [];
+    findTags.forEach((element) => {
+      pureLetter.push(element.replace('#', ''));
+    });
+    //...new Set(chars) Remove duplicates from an array using a Set, concat two array
+    concatTags = [...new Set(tags.concat(pureLetter))];
+
+  });
+  res.json({ status: 'ok', tags: concatTags });
 
 });
 
@@ -100,7 +141,26 @@ app.get('/api/tags/all', async (req, res) => {
 //  success response: {status:'ok', tag: 'tagName', pages: ['tagName', 'otherTagName']}
 //  failure response: no failure response
 app.get('/api/tags/:tag', async (req, res) => {
+  const tagName = req.params.tag;
+  // first read all files
+  const pathOfData = __dirname + '/' + DATA_DIR;
+  const readDirectory = await readDir(pathOfData);
 
+  // loop over files and if tag exist then show its file
+  let tag = '';
+  let pages = [];
+  readDirectory.forEach((file) => {
+    const filePath = __dirname + '/' + DATA_DIR + '/' + file;
+
+    const body = fs.readFileSync(filePath, 'utf-8');
+    const findTags = body.match('#' + tagName);
+    if (findTags) {
+      // if tag exist write its page name
+      tag = tagName;
+      pages.push(file.replace('.md', ''));
+    }
+  });
+  res.json({ status: 'ok', tag: tag, pages: pages });
 });
 
 
